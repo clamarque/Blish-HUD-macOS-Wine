@@ -50,6 +50,8 @@ namespace Blish_HUD {
 
                 if (wineLayered) {
                     args.GraphicsDeviceInformation.PresentationParameters.BackBufferFormat = SurfaceFormat.Bgra32;
+                    // Render into a hidden window so the swap chain surface does not cover the layered window.
+                    args.GraphicsDeviceInformation.PresentationParameters.DeviceWindowHandle = WineLayeredPresenter.GetDeviceWindowHandle();
                 }
             };
 

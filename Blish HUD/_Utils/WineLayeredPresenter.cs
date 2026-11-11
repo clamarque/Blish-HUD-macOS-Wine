@@ -28,6 +28,30 @@ namespace Blish_HUD {
 
         public static bool Enabled => _enabled.Value;
 
+        private static System.Windows.Forms.Form _deviceForm;
+
+        /// <summary>
+        /// Handle of a hidden window used as the D3D device window under Wine.
+        /// On macOS, Wine attaches the swap chain's Metal surface to the device window and draws it
+        /// above the layered window content, hiding it. Rendering into a never-shown window avoids that:
+        /// the visible overlay window only receives the frames pushed with UpdateLayeredWindow.
+        /// </summary>
+        public static IntPtr GetDeviceWindowHandle() {
+            if (_deviceForm == null) {
+                _deviceForm = new System.Windows.Forms.Form {
+                    ShowInTaskbar   = false,
+                    FormBorderStyle = System.Windows.Forms.FormBorderStyle.None,
+                    StartPosition   = System.Windows.Forms.FormStartPosition.Manual,
+                    Location        = new System.Drawing.Point(-32000, -32000),
+                    Text            = "Blish HUD (Wine render target)"
+                };
+
+                Logger.Info("Running under Wine: rendering into a hidden device window.");
+            }
+
+            return _deviceForm.Handle; // Creates the window handle without showing the form
+        }
+
         private static IntPtr _memDc;
         private static IntPtr _bitmap;
         private static IntPtr _oldBitmap;
