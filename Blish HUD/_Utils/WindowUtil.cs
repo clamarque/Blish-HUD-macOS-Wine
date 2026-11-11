@@ -177,9 +177,6 @@ namespace Blish_HUD {
         [DllImport("user32.dll")]
         private static extern IntPtr GetFocus();
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetActiveWindow();
-
         private static string DescribeWindow(IntPtr hWnd) {
             if (hWnd == IntPtr.Zero) return "0x0";
 
