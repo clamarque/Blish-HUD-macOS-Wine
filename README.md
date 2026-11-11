@@ -7,12 +7,13 @@ Tested on: Apple M4 Max, macOS 26, GameHub with `wine-proton_11.0` + GPTK 3, Bli
 
 ## What is fixed
 
-Stock Blish HUD runs under Wine but is unusable on macOS for two reasons. Both fixes only activate when Wine is detected (`ntdll!wine_get_version`); on Windows the behavior is unchanged.
+Stock Blish HUD runs under Wine but is unusable on macOS for three reasons. Both fixes only activate when Wine is detected (`ntdll!wine_get_version`); on Windows the behavior is unchanged.
 
 | Problem on macOS / Wine | Cause | Fix |
 |---|---|---|
 | Crash a few seconds after GW2 is detected (`NotImplementedException` in `NAudio.CoreAudioApi.AudioSessionManager.UnregisterNotifications`) | Wine does not implement `IAudioSessionManager2::UnregisterSessionNotification`; NAudio's finalizer throws on the finalizer thread and kills the process | Per-process audio session tracking is skipped under Wine; the overlay volume uses the volume setting instead of following the game |
 | Overlay is an opaque black window | Wine has no DWM composition (`DwmExtendFrameIntoClientArea` is a stub), and on macOS the D3D/Metal swap chain surface covers the window | Under Wine, frames are rendered into a hidden device window, read back from the back buffer and pushed to the overlay window with `UpdateLayeredWindow` (per-pixel alpha), which Wine's macOS driver supports |
+| Clicking the overlay disables keyboard/mouse input (text boxes cannot be typed in, icons need several clicks) | On macOS, clicking the overlay leaves the desktop window (`#32769`) as Wine's foreground window, so GW2 is considered unfocused and the input hooks are disabled | Under Wine the overlay gets `WS_EX_NOACTIVATE`; if the desktop is foreground while the cursor is over GW2, GW2 is still considered focused |
 
 Code: [`AudioIntegration.cs`](Blish%20HUD/GameServices/GameIntegration/AudioIntegration.cs), [`WineLayeredPresenter.cs`](Blish%20HUD/_Utils/WineLayeredPresenter.cs), [`BlishHud.cs`](Blish%20HUD/BlishHud.cs), [`WindowUtil.cs`](Blish%20HUD/_Utils/WindowUtil.cs).
 Standalone test of per-pixel alpha under Wine: [`wine-overlay-test/layered_test.c`](wine-overlay-test/layered_test.c).
@@ -47,7 +48,9 @@ Push the upstream tags to your fork first (`git push <fork> v1.3.0`), otherwise 
 - **Do not accept Blish HUD self-updates**: they replace the patched executable.
 - The overlay volume does not follow the game volume; set it in Blish HUD's settings.
 - Reading back every frame costs CPU (~0.7 core on an M4 Max at 1728×994). Lower Blish HUD's frame limit if needed.
-- Mouse interaction with Blish HUD windows has not been extensively tested.
+- While GW2's chat input has focus, Blish HUD text boxes do not receive keys (same as on Windows): leave the chat first.
+- After clicking Blish HUD, switching to another macOS app with the cursor still over the game may leave the overlay on top.
+- `Cmd+Q` hides Blish HUD to the background instead of quitting; the launcher stops a lingering instance before starting a new one.
 
 ---
 
