@@ -153,6 +153,24 @@ namespace Blish_HUD {
             }
         }
 
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        private static readonly uint _currentProcessId = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+
+        /// <summary>
+        /// Under Wine on macOS, clicking an overlay window activates it (WS_EX_TRANSPARENT does not pass
+        /// the click through to GW2), and Form.ActiveForm stays null. Without this check GW2 is considered
+        /// unfocused, input hooks are disabled and Blish HUD text boxes cannot receive keyboard input.
+        /// Treat any foreground window owned by this process as "GW2 still has focus" under Wine.
+        /// </summary>
+        private static bool IsOwnWindowUnderWine(IntPtr windowHandle) {
+            if (windowHandle == IntPtr.Zero || !Blish_HUD.GameIntegration.AudioIntegration.IsRunningUnderWine) return false;
+
+            GetWindowThreadProcessId(windowHandle, out uint processId);
+            return processId == _currentProcessId;
+        }
+
         private const uint LWA_COLORKEY = 0x00000001;
         private const uint LWA_ALPHA    = 0x00000002;
 
@@ -202,7 +220,7 @@ namespace Blish_HUD {
 
             // If Guild Wars 2 is not the focused application, set Blish HUD to
             // be above Guild Wars 2, but below the next application's window in z-order
-            if (activeWindowHandle != gw2WindowHandle && Form.ActiveForm == null) {
+            if (activeWindowHandle != gw2WindowHandle && Form.ActiveForm == null && !IsOwnWindowUnderWine(activeWindowHandle)) {
                 if (wasOnTop) {
                     Logger.Debug("GW2 is no longer the active window.");
 
