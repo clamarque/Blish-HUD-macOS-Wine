@@ -143,6 +143,11 @@ namespace Blish_HUD.GameIntegration {
         }
 
         private float GetVolume() {
+            // Under Wine, game audio is not tracked (see IsRunningUnderWine): use the volume setting.
+            if (IsRunningUnderWine) {
+                return _volumeSetting.Value;
+            }
+
             float gameVol = CalculateAverageVolume();
             if (_muteIfNoGameAudio.Value && gameVol < 0.0001f) {
                 return 0;
@@ -185,6 +190,11 @@ namespace Blish_HUD.GameIntegration {
         private void InitializeProcessMeterInformations() {
             if (!_service.Gw2Instance.Gw2IsRunning) return;
 
+            // Wine does not implement IAudioSessionManager2::UnregisterSessionNotification (E_NOTIMPL).
+            // NAudio's AudioSessionManager finalizer then throws on the finalizer thread and kills the process.
+            // Skip per-process audio session tracking entirely under Wine.
+            if (IsRunningUnderWine) return;
+
             _gw2AudioDevices.Clear();
             foreach (var device in _deviceEnumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
                 SessionCollection sessionEnumerator = null;
@@ -217,6 +227,35 @@ namespace Blish_HUD.GameIntegration {
                 if (shouldDispose) {
                     device.Dispose();
                 }
+            }
+        }
+
+        private static readonly Lazy<bool> _isRunningUnderWine = new Lazy<bool>(DetectWine);
+
+        /// <summary>
+        /// True when running under Wine (Linux / macOS compatibility layer).
+        /// </summary>
+        public static bool IsRunningUnderWine => _isRunningUnderWine.Value;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Ansi)]
+        private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+
+        private static bool DetectWine() {
+            try {
+                var ntdll = GetModuleHandle("ntdll.dll");
+                bool underWine = ntdll != IntPtr.Zero && GetProcAddress(ntdll, "wine_get_version") != IntPtr.Zero;
+
+                if (underWine) {
+                    Logger.Info("Running under Wine: game audio session tracking is disabled, the volume setting is used instead.");
+                }
+
+                return underWine;
+            } catch (Exception e) {
+                Logger.Warn(e, "Failed to detect Wine.");
+                return false;
             }
         }
 
