@@ -171,6 +171,33 @@ namespace Blish_HUD {
             return processId == _currentProcessId;
         }
 
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetFocus();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetActiveWindow();
+
+        private static string DescribeWindow(IntPtr hWnd) {
+            if (hWnd == IntPtr.Zero) return "0x0";
+
+            GetWindowThreadProcessId(hWnd, out uint pid);
+            var title = new StringBuilder(256);
+            GetWindowText(hWnd, title, title.Capacity);
+
+            return $"0x{hWnd.ToInt64():X} pid={pid} class=\"{GetClassNameOfWindow(hWnd)}\" title=\"{title}\"";
+        }
+
+        private static void LogForegroundWindowDetails(IntPtr foreground, IntPtr gw2Window, IntPtr overlayWindow) {
+            try {
+                Logger.Debug($"[Wine focus] foreground={DescribeWindow(foreground)} | gw2={DescribeWindow(gw2Window)} | overlay={DescribeWindow(overlayWindow)} | thisPid={_currentProcessId} | activeForm={(Form.ActiveForm != null)} | getActiveWindow={DescribeWindow(GetActiveWindow())} | getFocus={DescribeWindow(GetFocus())}");
+            } catch (Exception e) {
+                Logger.Debug(e, "[Wine focus] failed to describe windows");
+            }
+        }
+
         private const uint LWA_COLORKEY = 0x00000001;
         private const uint LWA_ALPHA    = 0x00000002;
 
@@ -223,6 +250,10 @@ namespace Blish_HUD {
             if (activeWindowHandle != gw2WindowHandle && Form.ActiveForm == null && !IsOwnWindowUnderWine(activeWindowHandle)) {
                 if (wasOnTop) {
                     Logger.Debug("GW2 is no longer the active window.");
+
+                    if (Blish_HUD.GameIntegration.AudioIntegration.IsRunningUnderWine) {
+                        LogForegroundWindowDetails(activeWindowHandle, gw2WindowHandle, winHandle);
+                    }
 
                     var nextHandle = GetWindow(gw2WindowHandle, GW.HWNDPREV);
                     if (nextHandle != IntPtr.Zero && nextHandle != winHandle) {
