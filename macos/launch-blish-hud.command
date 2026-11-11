@@ -17,6 +17,13 @@ if ! pgrep -f "Gw2-64.exe" >/dev/null; then
   exit 1
 fi
 
+# Stop a Blish HUD instance left running in the background (Cmd+Q does not always quit it)
+if pgrep -f "Blish HUD.exe" >/dev/null; then
+  pkill -f "Blish HUD.exe" || true
+  for i in $(seq 1 10); do pgrep -f "Blish HUD.exe" >/dev/null || break; sleep 1; done
+  pkill -9 -f "Blish HUD.exe" 2>/dev/null || true
+fi
+
 # Environment from the GameHub launch (GameHub's monitor and activity tag are left out)
 KEEP='^(DYLD_FALLBACK_LIBRARY_PATH|LANG|LC_ALL|PATH|PROCESS_TAG|SANDBOXFS_LAYER_MANIFEST|SANDBOXFS_LIB_PATH|WINEARCH|WINEDLLPATH|WINEENGINE_GPTK_DXGI_SPOOF_ENABLED|WINEMSYNC|WINEPREFIX|WINEPREFIX_BASE|WINE_GPTK_LIBD3DSHARED_PATH|WINE_INSTALLATION_PATH|WINE_PATH)='
 while IFS= read -r kv; do
