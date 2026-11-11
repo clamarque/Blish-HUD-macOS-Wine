@@ -140,9 +140,12 @@ namespace Blish_HUD {
             // Let Gw2InstanceIntegration sync behavior with game runtime
             SetShowInTaskbar(winHandle, false);
 
-            if (UseWineColorKey) {
+            if (WineLayeredPresenter.Enabled) {
+                // Frames are pushed with UpdateLayeredWindow (see WineLayeredPresenter).
+                // SetLayeredWindowAttributes must not be called, otherwise UpdateLayeredWindow fails.
+            } else if (UseWineColorKey) {
                 // Wine has no DWM composition (DwmExtendFrameIntoClientArea is a stub), so the
-                // transparent clear color ends up opaque black. Use a black color key instead.
+                // transparent clear color ends up opaque black. Experimental black color key.
                 Logger.Info("Running under Wine: using a black color key for overlay transparency.");
                 SetLayeredWindowAttributes(winHandle, 0x00000000, 255, LWA_COLORKEY);
             } else {
@@ -154,11 +157,12 @@ namespace Blish_HUD {
         private const uint LWA_ALPHA    = 0x00000002;
 
         /// <summary>
-        /// Under Wine, use a color key for transparency. Set BLISHHUD_WINE_COLORKEY=0 to disable.
+        /// Experimental: under Wine, use a black color key for transparency (BLISHHUD_WINE_COLORKEY=1).
+        /// Did not work with D3D rendering on macOS; kept as an opt-in fallback.
         /// </summary>
         private static bool UseWineColorKey =>
             Blish_HUD.GameIntegration.AudioIntegration.IsRunningUnderWine
-         && Environment.GetEnvironmentVariable("BLISHHUD_WINE_COLORKEY") != "0";
+         && Environment.GetEnvironmentVariable("BLISHHUD_WINE_COLORKEY") == "1";
 
         public enum OverlayUpdateResponse {
             WithFocus,

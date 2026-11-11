@@ -42,12 +42,19 @@ namespace Blish_HUD {
             BlishHud.Instance = this;
 
             this.ActiveGraphicsDeviceManager = new GraphicsDeviceManager(this);
+            bool wineLayered = WineLayeredPresenter.Enabled;
+
             this.ActiveGraphicsDeviceManager.PreparingDeviceSettings += delegate(object sender, PreparingDeviceSettingsEventArgs args) {
-                args.GraphicsDeviceInformation.PresentationParameters.MultiSampleCount = 4;
+                // Under Wine, frames are read back from the back buffer: keep it single-sampled and BGRA.
+                args.GraphicsDeviceInformation.PresentationParameters.MultiSampleCount = wineLayered ? 0 : 4;
+
+                if (wineLayered) {
+                    args.GraphicsDeviceInformation.PresentationParameters.BackBufferFormat = SurfaceFormat.Bgra32;
+                }
             };
 
             this.ActiveGraphicsDeviceManager.GraphicsProfile     = GraphicsProfile.HiDef;
-            this.ActiveGraphicsDeviceManager.PreferMultiSampling = true;
+            this.ActiveGraphicsDeviceManager.PreferMultiSampling = !wineLayered;
 
             this.ActiveContentManager = this.Content;
 
@@ -169,6 +176,21 @@ namespace Blish_HUD {
             _basicSpriteBatch.End();
             
             base.Draw(gameTime);
+        }
+
+        protected override void EndDraw() {
+            if (WineLayeredPresenter.Enabled) {
+                // Under Wine, push the frame to the layered window instead of presenting the swap chain.
+                try {
+                    WineLayeredPresenter.Present(this.GraphicsDevice, this.FormHandle);
+                } catch (Exception e) {
+                    Logger.Warn(e, "Failed to present the overlay through UpdateLayeredWindow.");
+                }
+
+                return;
+            }
+
+            base.EndDraw();
         }
     }
 }
