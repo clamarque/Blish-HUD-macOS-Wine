@@ -19,6 +19,7 @@ namespace Blish_HUD {
         private const uint WS_EX_CONTROLPARENT = 0x00010000;
         private const uint WS_EX_APPWINDOW     = 0x00040000;
         private const uint WS_EX_LAYERED       = 0x00080000;
+        private const uint WS_EX_NOACTIVATE    = 0x08000000;
 
         private const int GWL_STYLE   = -16;
         private const int GWL_EXSTYLE = -20;
@@ -116,6 +117,12 @@ namespace Blish_HUD {
         private static void SetWindowParam(IntPtr winHandle, bool showInTaskbar = false) {
             uint windowParam = WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_CONTROLPARENT | WS_EX_LAYERED;
 
+            if (Blish_HUD.GameIntegration.AudioIntegration.IsRunningUnderWine) {
+                // On macOS, clicks on the overlay activate it and Wine then reports the desktop as the
+                // foreground window, so GW2 is considered unfocused. Keep the overlay from being activated.
+                windowParam |= WS_EX_NOACTIVATE;
+            }
+
             if (showInTaskbar) {
                 ShowWindow(winHandle, SW_HIDE);
                 windowParam |= WS_EX_APPWINDOW;
@@ -169,6 +176,30 @@ namespace Blish_HUD {
 
             GetWindowThreadProcessId(windowHandle, out uint processId);
             return processId == _currentProcessId;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetDesktopWindow();
+
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out System.Drawing.Point lpPoint);
+
+        /// <summary>
+        /// Under Wine on macOS, clicking the overlay can leave the desktop window (#32769) as the
+        /// foreground window. If the cursor is over the GW2 client area at that moment, the user is
+        /// interacting with the overlay: treat GW2 as still focused.
+        /// </summary>
+        private static bool IsWineDesktopFocusOverGw2(IntPtr foreground, RECT gw2ClientRect, System.Drawing.Point gw2ScreenOrigin) {
+            if (!Blish_HUD.GameIntegration.AudioIntegration.IsRunningUnderWine) return false;
+            if (foreground != IntPtr.Zero && foreground != GetDesktopWindow()) return false;
+            if (!GetCursorPos(out var cursor)) return false;
+
+            int left   = gw2ScreenOrigin.X + gw2ClientRect.Left;
+            int top    = gw2ScreenOrigin.Y + gw2ClientRect.Top;
+            int right  = gw2ScreenOrigin.X + gw2ClientRect.Right;
+            int bottom = gw2ScreenOrigin.Y + gw2ClientRect.Bottom;
+
+            return cursor.X >= left && cursor.X < right && cursor.Y >= top && cursor.Y < bottom;
         }
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -244,7 +275,8 @@ namespace Blish_HUD {
 
             // If Guild Wars 2 is not the focused application, set Blish HUD to
             // be above Guild Wars 2, but below the next application's window in z-order
-            if (activeWindowHandle != gw2WindowHandle && Form.ActiveForm == null && !IsOwnWindowUnderWine(activeWindowHandle)) {
+            if (activeWindowHandle != gw2WindowHandle && Form.ActiveForm == null && !IsOwnWindowUnderWine(activeWindowHandle)
+             && !IsWineDesktopFocusOverGw2(activeWindowHandle, clientRect, screenPoint)) {
                 if (wasOnTop) {
                     Logger.Debug("GW2 is no longer the active window.");
 
